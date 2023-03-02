@@ -14,3 +14,4 @@ SILVATaxonomy = SemanticType(
     'SILVATaxonomy', variant_of=FeatureData.field['type'])
 SILVATaxidMap = SemanticType(
     'SILVATaxidMap', variant_of=FeatureData.field['type'])
+CARDDatabase = SemanticType('CARDDatabase')

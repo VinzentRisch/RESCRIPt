@@ -17,6 +17,7 @@ from qiime2.plugin.testing import TestPluginBase
 from q2_types.feature_data import (
     FeatureData, DNAIterator, AlignedDNAFASTAFormat, AlignedDNAIterator,
     DNAFASTAFormat, RNAFASTAFormat)
+from rescript.types._format import CARDDatabaseFormat
 
 from rescript._utilities import _read_fasta, _read_dna_alignment_fasta
 from rescript.types import (SILVATaxonomyFormat, SILVATaxonomyDirectoryFormat,
@@ -246,3 +247,18 @@ class TestDNAIteratorTransformers(RescriptTypesTestPluginBase):
         exp = _read_dna_alignment_fasta(self.aligned_dna_path)
         for observed, expected in zip(obs, exp):
             self.assertEqual(observed, expected)
+
+
+class TestCARDDatabaseTypesAndFormats(RescriptTypesTestPluginBase):
+
+    def test_card_database_format_validate_positive(self):
+        filepath = self.get_data_path('card.json')
+        format = CARDDatabaseFormat(filepath, mode='r')
+        # These should both just succeed
+        format.validate()
+
+    def test_dataframe_to_card_format_transformer(self):
+        filepath = self.get_data_path('card.json')
+        transformer = self.get_transformer(pd.DataFrame, CARDDatabaseFormat)
+        card_df = pd.read_json(filepath).transpose()
+        obs = transformer(card_df)

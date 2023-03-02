@@ -12,7 +12,7 @@ from q2_types.feature_data import (
     DNAFASTAFormat, DNAIterator, AlignedDNAFASTAFormat, RNAFASTAFormat)
 
 from ..plugin_setup import plugin
-from ._format import SILVATaxonomyFormat, SILVATaxidMapFormat
+from ._format import SILVATaxonomyFormat, SILVATaxidMapFormat, CARDDatabaseFormat
 from rescript._utilities import (_rna_to_dna, _rna_to_dna_iterator,
                                  _read_fasta, _dna_iterator_to_aligned_fasta)
 
@@ -75,3 +75,28 @@ def _7(data: RNAFASTAFormat) -> DNAIterator:
 @plugin.register_transformer
 def _8(data: DNAIterator) -> AlignedDNAFASTAFormat:
     return _dna_iterator_to_aligned_fasta(data)
+
+@plugin.register_transformer
+def _9(data: CARDDatabaseFormat) -> pd.DataFrame:
+    ff = pd.read_json(str(data)).transpose()
+    return ff
+
+
+@plugin.register_transformer
+def _10(data: pd.DataFrame) -> CARDDatabaseFormat:
+    ff = CARDDatabaseFormat()
+    with ff.open() as fh:
+        data.transpose().to_json(fh)
+    return ff
+
+
+@plugin.register_transformer
+def _11(data: CARDDatabaseFormat) -> DNAFASTAFormat:
+    genomes = DNAFASTAFormat()
+
+    with open(str(genomes), 'a') as fin:
+        for f in genome_seq_fps:
+            seq = skbio.read(
+                f, format='fasta', constructor=skbio.DNA, lowercase=True)
+            skbio.io.write(seq, format='fasta', into=fin)
+    return ff

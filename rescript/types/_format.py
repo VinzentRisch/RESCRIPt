@@ -5,7 +5,7 @@
 #
 # The full license is in the file LICENSE, distributed with this software.
 # ----------------------------------------------------------------------------
-
+import pandas as pd
 import qiime2.plugin.model as model
 from qiime2.plugin import ValidationError
 
@@ -124,3 +124,25 @@ class SILVATaxidMapFormat(model.TextFileFormat):
 SILVATaxidMapDirectoryFormat = model.SingleFileDirectoryFormat(
     'SILVATaxidMapDirectoryFormat', 'silva_taxmap.tsv',
     SILVATaxidMapFormat)
+
+
+
+class CARDDatabaseFormat(model.TextFileFormat):
+    def _validate(self, n_records=None):
+        HEADER = ['model_id', 'model_name', 'model_type', 'model_type_id', 'model_description', 'model_param', 'model_sequences', 'ARO_accession', 'ARO_id', 'ARO_name', 'CARD_short_name', 'ARO_description', 'ARO_category', 'description', 'access']
+        HEADER2 = ['model_id', 'model_name', 'model_type', 'model_type_id', 'model_description', 'model_param', 'model_sequences', 'ARO_accession', 'ARO_id', 'ARO_name', 'ARO_description', 'ARO_category', 'description', 'access']
+        card_df = pd.read_json(str(self)).transpose()
+        header = list(card_df.columns)
+        if header != HEADER and header != HEADER2:
+            raise ValidationError(
+                "Header line does not match CARDDatabase format. Must consist of "
+                "the following values: " + ', '.join(HEADER) +
+                ".\n\nFound instead: " + ', '.join(header))
+
+    def _validate_(self, level):
+        self._validate()
+
+
+CARDDatabaseDirectoryFormat = model.SingleFileDirectoryFormat(
+    'CARDDatabaseDirectoryFormat', 'card.json',
+    CARDDatabaseFormat)

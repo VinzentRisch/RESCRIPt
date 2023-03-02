@@ -13,6 +13,7 @@ from qiime2.plugin import (Str, Plugin, Choices, List, Citations, Range, Int,
                            Float, Visualization, Bool, TypeMap, Metadata,
                            MetadataColumn, Categorical)
 
+from .card import fetch_card_data
 from .subsample import subsample_fasta
 from .trim_alignment import trim_alignment
 from .merge import merge_taxa
@@ -41,8 +42,8 @@ from q2_feature_classifier._taxonomic_classifier import TaxonomicClassifier
 import rescript
 from rescript.types._format import (
     SILVATaxonomyFormat, SILVATaxonomyDirectoryFormat, SILVATaxidMapFormat,
-    SILVATaxidMapDirectoryFormat)
-from rescript.types._type import SILVATaxonomy, SILVATaxidMap
+    SILVATaxidMapDirectoryFormat, CARDDatabaseDirectoryFormat, CARDDatabaseFormat)
+from rescript.types._type import SILVATaxonomy, SILVATaxidMap, CARDDatabase
 from rescript.types.methods import reverse_transcribe
 from rescript.ncbi import (
     get_ncbi_data, _default_ranks, _allowed_ranks, get_ncbi_data_protein)
@@ -982,66 +983,85 @@ plugin.methods.register_function(
 
 
 plugin.methods.register_function(
-    function=extract_seq_segments,
-    inputs={'input_sequences': FeatureData[Sequence],
-            'reference_segment_sequences': FeatureData[Sequence]},
-    parameters={'threads': VSEARCH_PARAMS['threads'],
-                'perc_identity': VSEARCH_PARAMS['perc_identity'],
-                'min_seq_len': Int % Range(1, None)
-                },
-    outputs=[('extracted_sequence_segments', FeatureData[Sequence]),
-             ('unmatched_sequences', FeatureData[Sequence])],
-    input_descriptions={
-        'input_sequences': 'Sequences from which matching shorter sequence '
-                           'segments (regions) can be extracted from. '
-                           'Sequences containing segments that match those '
-                           'from \'reference-segment-sequences\' will have '
-                           'those segments extracted and written to file.',
-        'reference_segment_sequences': 'Reference sequence segments that '
-                                       'will be used to search for and '
-                                       'extract matching segments from '
-                                       '\'sequences\'.',
-                        },
+    function=fetch_card_data,
+    inputs={},
+    parameters={'version': Str},
+    outputs=[('database', CARDDatabase)],
+    input_descriptions={},
     parameter_descriptions={
-                'threads': VSEARCH_PARAM_DESCRIPTIONS['threads'],
-                'perc_identity': VSEARCH_PARAM_DESCRIPTIONS['perc_identity'],
-                'min_seq_len': 'Minimum length of sequence allowed '
-                               'for searching. Any sequence less than '
-                               'this will be discarded. If not set, default '
-                               'program settings will be used.'},
+                'version': VSEARCH_PARAM_DESCRIPTIONS['threads']},
     output_descriptions={
-        'extracted_sequence_segments': 'Extracted sequence segments '
-                                       'from \'input-sequences\' '
-                                       'that succesfully aligned to '
-                                       '\'reference-segment-sequences\'.',
-        'unmatched_sequences': 'Sequences in \'input-sequences\' that did not '
-                               'have matching sequence segments within '
-                               '\'reference-segment-sequences\'.'
-                        },
-    name='Use reference sequences to extract shorter matching sequence '
-         'segments from longer sequences based on a user-defined '
-         '\'perc-identity\' value.',
+        'database': '',},
+    name='Mock function',
+    description=(''),
+    citations=[]
+)
+plugin.methods.register_function(
+    function=dereplicate,
+    inputs={'sequences': FeatureData[Sequence],
+            'taxa': FeatureData[Taxonomy]},
+    parameters={
+        'mode': Str % Choices(['uniq', 'lca', 'majority', 'super']),
+        'threads': VSEARCH_PARAMS['threads'],
+        'perc_identity': VSEARCH_PARAMS['perc_identity'],
+        'derep_prefix': Bool,
+        'rank_handles': List[Str % Choices(['disable'])] | List[Str % Choices(
+                                                        _allowed_ranks)]},
+    outputs=[('dereplicated_sequences', FeatureData[Sequence]),
+             ('dereplicated_taxa', FeatureData[Taxonomy])],
+    input_descriptions={
+        'sequences': 'Sequences to be dereplicated',
+        'taxa': 'Taxonomic classifications of sequences to be dereplicated'},
+    parameter_descriptions={
+        'mode': 'How to handle dereplication when sequences map to distinct '
+                'taxonomies. "uniq" will retain all sequences with unique '
+                'taxonomic affiliations. "lca" will find the least common '
+                'ancestor among all taxa sharing a sequence. "majority" will '
+                'find the most common taxonomic label associated with that '
+                'sequence; note that in the event of a tie, "majority" will '
+                'pick the winner arbitrarily. ' + super_lca_desc,
+        'threads': VSEARCH_PARAM_DESCRIPTIONS['threads'],
+        'perc_identity': VSEARCH_PARAM_DESCRIPTIONS['perc_identity'],
+        'derep_prefix': 'Merge sequences with identical prefixes. If a '
+                        'sequence is identical to the prefix of two or more '
+                        'longer sequences, it is clustered with the shortest '
+                        'of them. If they are equally long, it is clustered '
+                        'with the most abundant.',
+        'rank_handles': 'Specifies the set of rank handles used to backfill '
+                        'missing ranks in the resulting dereplicated '
+                        'taxonomy. Use \'disable\' to prevent applying '
+                        '\'rank_handles\'. '
+    },
+    name='Dereplicate features with matching sequences and taxonomies.',
     description=(
-        'This action provides the ability to extract a region, or segment, '
-        'of sequence without the need to specify primer pairs. This is very '
-        'useful in cases when one or more of the primer sequences are not '
-        'present within the target sequences, which prevents extraction of '
-        'the (amplicon) region through primer-pair searching. Here, VSEARCH '
-        'is used to extract these segments based on a reference pool of '
-        'sequences that only span the region of interest.'
-        ),
+        'Dereplicate FASTA format sequences and taxonomies wherever '
+        'sequences and taxonomies match; duplicated sequences and taxonomies '
+        'are dereplicated using the "mode" parameter to either: retain all '
+        'sequences that have unique taxonomic annotations even if the '
+        'sequences are duplicates (uniq); or return only dereplicated '
+        'sequences labeled by either the least common ancestor (lca) or the '
+        'most common taxonomic label associated with sequences in that '
+        'cluster (majority). Note: all taxonomy strings will be coerced '
+        'to semicolon delimiters without any leading or trailing spaces. '
+        'If this is not desired, please use \'rescript edit-taxonomy\' '
+        'to make any changes.'),
     citations=[citations['rognes2016vsearch']]
 )
 
 
 # Registrations
-plugin.register_semantic_types(SILVATaxonomy, SILVATaxidMap)
+plugin.register_semantic_types(SILVATaxonomy, SILVATaxidMap, CARDDatabase)
 plugin.register_semantic_type_to_format(
     FeatureData[SILVATaxonomy],
     artifact_format=SILVATaxonomyDirectoryFormat)
 plugin.register_semantic_type_to_format(
     FeatureData[SILVATaxidMap],
     artifact_format=SILVATaxidMapDirectoryFormat)
+plugin.register_semantic_type_to_format(
+    CARDDatabase,
+    artifact_format=CARDDatabaseDirectoryFormat)
 plugin.register_formats(SILVATaxonomyFormat, SILVATaxonomyDirectoryFormat,
-                        SILVATaxidMapFormat, SILVATaxidMapDirectoryFormat)
+                        SILVATaxidMapFormat, SILVATaxidMapDirectoryFormat,
+                        CARDDatabaseFormat, CARDDatabaseDirectoryFormat)
+
 importlib.import_module('rescript.types._transformer')
